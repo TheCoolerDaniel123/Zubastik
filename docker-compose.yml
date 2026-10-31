@@ -1,0 +1,152 @@
+name: zub-backend
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  auth-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+      - ./auth-service/migrations/20251116152843_create_users_table.up.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - zub-net
+
+  user-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - user-postgres-data:/var/lib/postgresql/data
+      - ./user-service/migrations/20251116152843_create_users_table.up.sql:/docker-entrypoint-initdb.d/01_users.sql:ro
+      - ./user-service/migrations/20260417000000_create_doctor_tables.up.sql:/docker-entrypoint-initdb.d/02_doctor.sql:ro
+      - ./user-service/migrations/20260418000000_create_chat_messages.up.sql:/docker-entrypoint-initdb.d/03_chat.sql:ro
+      - ./user-service/migrations/20260418000001_create_direct_messages.up.sql:/docker-entrypoint-initdb.d/04_messaging.sql:ro
+      - ./user-service/migrations/20260512000000_add_tooth_note.up.sql:/docker-entrypoint-initdb.d/05_tooth_note.sql:ro
+      - ./user-service/migrations/20260513000000_create_calendar_events.up.sql:/docker-entrypoint-initdb.d/06_calendar.sql:ro
+      - ./user-service/migrations/20260523000000_create_articles.up.sql:/docker-entrypoint-initdb.d/07_articles.sql:ro
+      - ./user-service/migrations/20260524000000_add_image_url_to_articles.up.sql:/docker-entrypoint-initdb.d/08_image_url.sql:ro
+      - ./user-service/migrations/20260524000001_create_doctor_profiles.up.sql:/docker-entrypoint-initdb.d/09_doctor_profiles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d users"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - zub-net
+
+  auth-redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass redis
+    volumes:
+      - auth-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - zub-net
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    environment:
+      ENV_TYPE: prod
+      RUN_PORT: 8080
+      GRPC: user-service:50051
+      DATABASE_HOST: auth-postgres
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: auth
+      CACHE_HOST: auth-redis
+      CACHE_PORT: 6379
+      CACHE_PASSWORD: redis
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 24h
+      VERIFICATION_CODE_TTL: 5m
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      auth-redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - zub-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    environment:
+      ENV_TYPE: prod
+      RUN_PORT: 8081
+      GRPC_PORT: 50051
+      DATABASE_HOST: user-postgres
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: users
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ACCESS_TOKEN_TTL: 15m
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-}
+      GIGACHAT_SCOPE: GIGACHAT_API_PERS
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+    networks:
+      - zub-net
+
+  apigateway-service:
+    build:
+      context: .
+      dockerfile: apigateway-service/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ENV_TYPE: prod
+      RUN_PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:8080
+      USER_SERVICE_URL: http://user-service:8081
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    depends_on:
+      - auth-service
+      - user-service
+    networks:
+      - zub-net
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8081:8080"
+    environment:
+      SWAGGER_JSON: /openapi.yaml
+      CORS: "true"
+    volumes:
+      - ./api/openapi.yaml:/openapi.yaml:ro
+    networks:
+      - zub-net
+
+volumes:
+  auth-postgres-data:
+  user-postgres-data:
+  auth-redis-data:
+
+networks:
+  zub-net:
+    driver: bridge

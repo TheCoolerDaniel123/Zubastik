@@ -1,0 +1,1 @@
+ALTER TABLE teeth DROP COLUMN note;

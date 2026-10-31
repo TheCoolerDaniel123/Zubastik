@@ -1,0 +1,1 @@
+ALTER TABLE teeth ADD COLUMN note TEXT NULL;
