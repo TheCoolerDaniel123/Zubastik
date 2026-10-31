@@ -6,9 +6,7 @@
 ![gRPC](https://img.shields.io/badge/gRPC-244c5a?logo=grpc&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-<!-- TODO: after the repo is created, add:
-[![CI](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml)
-and a license badge -->
+[![CI](https://github.com/TheCoolerDaniel123/Zubastik/actions/workflows/ci.yml/badge.svg)](https://github.com/TheCoolerDaniel123/Zubastik/actions/workflows/ci.yml)
 
 Backend for **Zub**, a dental health app. Three Go microservices sit behind a single API Gateway and provide phone-based authentication, patient dental profiles, an AI assistant, a calendar, doctor–patient messaging, and a moderated library of articles.
 
